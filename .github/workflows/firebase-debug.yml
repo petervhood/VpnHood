@@ -1,0 +1,110 @@
+﻿name: Firebase Build & Test
+
+on:
+  push:
+    branches: [ "test-devices" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Manual Override'
+        required: true
+        default: 'Debug'
+        type: choice
+        options: [Debug, Release]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    env:
+      # 1. Check if it's a manual trigger
+      # 2. Check if commit message contains "[release]" (case-insensitive)
+      # 3. Default to Debug
+      CONFIG: >-
+        ${{ github.event.inputs.build_type || 
+            (contains(github.event.head_commit.message, '[release]') && 'Release' || 'Debug') 
+        }}
+      PROJECT_PATH: "Src/Apps/Connect.Android.Google"
+      TFM: "net10.0-android36.1"
+      DOTNET_ROOT: /usr/share/dotnet
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore appsettings.json files
+        run: |
+          # Move to the parent directory of the repository root
+          cd ..
+          mkdir -p .user/VpnHoodConnect
+          
+          # Write both base and environment-specific JSONs for merging
+          echo '${{ secrets.APPSETTINGS_JSON }}' > .user/VpnHoodConnect/appsettings.json
+          echo '${{ secrets.APPSETTINGS_DEBUG_JSON }}' > .user/VpnHoodConnect/appsettings.Debug.json
+          
+          # List files for verification (wont show content)
+          ls -l .user/VpnHoodConnect/
+
+      - name: Restore google-services.json
+        run: |
+          mkdir -p ${{ env.PROJECT_PATH }}/Properties
+          echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > ${{ env.PROJECT_PATH }}/Properties/google-services.json
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > release.jks
+
+      - name: Install Android Workload
+        run: dotnet workload install android
+
+      - name: Restore Project Dependencies
+        run: |
+          PROJECT_FILE=$(find ${{ env.PROJECT_PATH }} -name "*.csproj" | head -n 1)
+          dotnet restore "$PROJECT_FILE"
+
+      - name: Build Android Project
+        run: |
+          PROJECT_FILE=$(find ${{ env.PROJECT_PATH }} -name "*.csproj" | head -n 1)
+          
+          dotnet build "$PROJECT_FILE" \
+            -c ${{ env.CONFIG }} \
+            -f ${{ env.TFM }} \
+            --no-restore \
+            -p:SolutionDir="${{ github.workspace }}/" \
+            -p:Deterministic=false \
+            -p:EmbedAssembliesIntoApk=True \
+            -p:AndroidGenerateAppBundle=False \
+            -p:CreatePackage=true \
+            -p:AndroidPackageFormat=apk \
+            -p:AndroidKeyStore=True \
+            -p:AndroidSigningKeyStore="$(pwd)/release.jks" \
+            -p:AndroidSigningStorePass="${{ secrets.ANDROID_KEYSTORE_PASS }}" \
+            -p:AndroidSigningKeyAlias="${{ secrets.ANDROID_KEYSTORE_ALIAS }}" \
+            -p:AndroidSigningKeyPass="${{ secrets.ANDROID_KEYSTORE_PASS }}"
+
+      - name: Prepare APK for Release
+        run: |
+          APK_PATH=$(find ${{ env.PROJECT_PATH }}/bin/${{ env.CONFIG }}/${{ env.TFM }} -name "*-Signed.apk" | head -n 1)
+          # Rename to a clean filename for the download link
+          cp "$APK_PATH" ./VpnHood-Connect-${{ env.CONFIG }}.apk
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-${{ env.CONFIG }}
+          name: Latest ${{ env.CONFIG }} Build
+          body: |
+            Direct download link for the latest build.
+            Configuration: ${{ env.CONFIG }}
+            Commit: ${{ github.sha }}
+          files: ./VpnHood-Connect-${{ env.CONFIG }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
