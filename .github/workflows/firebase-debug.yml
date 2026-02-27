@@ -40,6 +40,19 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Restore appsettings.json files
+        run: |
+          # Move to the parent directory of the repository root
+          cd ..
+          mkdir -p .user/VpnHoodConnect
+          
+          # Write both base and environment-specific JSONs for merging
+          echo '${{ secrets.APPSETTINGS_JSON }}' > .user/VpnHoodConnect/appsettings.json
+          echo '${{ secrets.APPSETTINGS_ENV_JSON }}' > .user/VpnHoodConnect/appsettings.${{ env.CONFIG }}.json
+          
+          # List files for verification (wont show content)
+          ls -l .user/VpnHoodConnect/
+
       - name: Restore google-services.json
         run: |
           mkdir -p ${{ env.PROJECT_PATH }}/Properties
@@ -65,6 +78,8 @@ jobs:
             -c ${{ env.CONFIG }} \
             -f ${{ env.TFM }} \
             --no-restore \
+            -p:SolutionDir="${{ github.workspace }}/" \
+            -p:Deterministic=false \
             -p:EmbedAssembliesIntoApk=True \
             -p:AndroidGenerateAppBundle=False \
             -p:CreatePackage=true \
