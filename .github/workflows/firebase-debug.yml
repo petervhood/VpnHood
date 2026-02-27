@@ -48,7 +48,7 @@ jobs:
           
           # Write both base and environment-specific JSONs for merging
           echo '${{ secrets.APPSETTINGS_JSON }}' > .user/VpnHoodConnect/appsettings.json
-          echo '${{ secrets.APPSETTINGS_ENV_JSON }}' > .user/VpnHoodConnect/appsettings.${{ env.CONFIG }}.json
+          echo '${{ secrets.APPSETTINGS_DEBUG_JSON }}' > .user/VpnHoodConnect/appsettings.Debug.json
           
           # List files for verification (wont show content)
           ls -l .user/VpnHoodConnect/
