@@ -34,10 +34,10 @@ public class WinTunVpnAdapter(WinVpnAdapterSettings adapterSettings)
     public override bool IsAppFilterSupported => false;
     protected override string? AppPackageId => null;
 
-    protected override Task SetAllowedApps(string[] packageIds, CancellationToken cancellationToken) =>
+    protected override Task SetAllowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken) =>
         throw new NotSupportedException("App filtering is not supported on WinTun.");
 
-    protected override Task SetDisallowedApps(string[] packageIds, CancellationToken cancellationToken) =>
+    protected override Task SetDisallowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken) =>
         throw new NotSupportedException("App filtering is not supported on WinTun.");
 
     private static Guid BuildGuidFromName(string adapterName)
@@ -236,7 +236,7 @@ public class WinTunVpnAdapter(WinVpnAdapterSettings adapterSettings)
     //    await OsUtils.ExecuteCommandAsync("netsh", commandV6, cancellationToken);
     //}
 
-    protected override async Task SetDnsServers(IPAddress[] dnsServers, CancellationToken cancellationToken)
+    protected override async Task SetDnsServers(IEnumerable<IPAddress> dnsServers, CancellationToken cancellationToken)
     {
         // remove previous DNS servers.
         // Do not log in debug mode because it is common error as the adapter is usually new

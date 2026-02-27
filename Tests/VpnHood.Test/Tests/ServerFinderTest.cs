@@ -2,6 +2,7 @@
 using VpnHood.Core.Server;
 using VpnHood.Test.AccessManagers;
 using VpnHood.Test.Device;
+using VpnHood.Test.Extensions;
 using VpnHood.Test.Providers;
 
 namespace VpnHood.Test.Tests;
@@ -38,9 +39,9 @@ public class ServerFinderTest : TestBase
             await client.WaitForState(ClientState.Connected);
 
             Assert.IsTrue(
-                servers[2].ServerHost.TcpEndPoints.First().Equals(client.HostTcpEndPoint) ||
-                servers[3].ServerHost.TcpEndPoints.First().Equals(client.HostTcpEndPoint) ||
-                servers[4].ServerHost.TcpEndPoints.First().Equals(client.HostTcpEndPoint)
+                servers[2].ServerHost.TcpEndPoints.First().Equals(client.Session?.Config.HostTcpEndPoint) ||
+                servers[3].ServerHost.TcpEndPoints.First().Equals(client.Session?.Config.HostTcpEndPoint) ||
+                servers[4].ServerHost.TcpEndPoints.First().Equals(client.Session?.Config.HostTcpEndPoint)
             );
         }
         finally {
@@ -95,7 +96,7 @@ public class ServerFinderTest : TestBase
                 await TestHelper.CreateClient(clientOptions: clientOptions, vpnAdapter: new TestNullVpnAdapter());
             await client.WaitForState(ClientState.Connected);
 
-            Assert.AreEqual(servers[5].ServerHost.TcpEndPoints.First(), client.HostTcpEndPoint);
+            Assert.AreEqual(servers[5].ServerHost.TcpEndPoints.First(), client.Session?.Config.HostTcpEndPoint);
 
             // tracker should report unreachable servers
             var testTracker = (TestTracker?)client.Tracker;

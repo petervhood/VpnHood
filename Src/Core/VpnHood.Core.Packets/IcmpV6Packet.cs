@@ -1,4 +1,5 @@
 ﻿using System.Buffers.Binary;
+using VpnHood.Core.Toolkit.Net;
 
 namespace VpnHood.Core.Packets;
 

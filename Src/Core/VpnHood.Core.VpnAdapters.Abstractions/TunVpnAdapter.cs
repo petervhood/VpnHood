@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -36,13 +37,13 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
     protected abstract string? AppPackageId { get; }
     protected abstract Task SetMtu(int mtu, bool ipV4, bool ipV6, CancellationToken cancellationToken);
     protected abstract Task SetMetric(int metric, bool ipV4, bool ipV6, CancellationToken cancellationToken);
-    protected abstract Task SetDnsServers(IPAddress[] dnsServers, CancellationToken cancellationToken);
+    protected abstract Task SetDnsServers(IEnumerable<IPAddress> dnsServers, CancellationToken cancellationToken);
     protected abstract Task AddRoute(IpNetwork ipNetwork, CancellationToken cancellationToken);
     protected abstract Task AddAddress(IpNetwork ipNetwork, CancellationToken cancellationToken);
     protected abstract Task AddNat(IpNetwork ipNetwork, CancellationToken cancellationToken);
     protected abstract Task SetSessionName(string sessionName, CancellationToken cancellationToken);
-    protected abstract Task SetAllowedApps(string[] packageIds, CancellationToken cancellationToken);
-    protected abstract Task SetDisallowedApps(string[] packageIds, CancellationToken cancellationToken);
+    protected abstract Task SetAllowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken);
+    protected abstract Task SetDisallowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken);
     protected abstract Task AdapterAdd(CancellationToken cancellationToken);
     protected abstract void AdapterRemove();
     protected abstract Task AdapterOpen(CancellationToken cancellationToken);
@@ -58,9 +59,6 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
 
     protected abstract bool WritePacket(IpPacket ipPacket);
 
-    protected virtual void OnPrimaryAdapterIpChanged()
-    {
-    }
 
     public event EventHandler? Disposed;
     public string AdapterName { get; }
@@ -72,6 +70,7 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
     public IPAddress? GatewayIpV6 { get; private set; }
     public bool IsIpVersionSupported(IpVersion ipVersion) => GetPrimaryAdapterAddress(ipVersion) != null;
     public bool IsStarted { get; private set; }
+    public event EventHandler? PrimaryAdapterIpChanged;
 
     // ReSharper disable once InconsistentlySynchronizedField
     private bool IsReady => IsStarted && !_isStopping && !IsDisposed && !IsDisposing;
@@ -100,8 +99,9 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
         if (!Equals(primaryAdapterIpV4, PrimaryAdapterIpV4) || !Equals(primaryAdapterIpV6, PrimaryAdapterIpV6)) {
             PrimaryAdapterIpV4 = primaryAdapterIpV4;
             PrimaryAdapterIpV6 = primaryAdapterIpV6;
-            OnPrimaryAdapterIpChanged();
+            PrimaryAdapterIpChanged?.Invoke(this, e);
         }
+
     }
 
     public IPAddress? GetPrimaryAdapterAddress(IpVersion ipVersion)
@@ -208,7 +208,7 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
             await SetDnsServers(dnsServers, cancellationToken).Vhc();
 
             // exclude dead networks
-            var includeNetworks = options.IncludeNetworks;
+            var includeNetworks = options.IncludeNetworks.ToArray();
             if (IsSocketProtectedByBind) {
                 includeNetworks = includeNetworks
                     .ToIpRanges()
@@ -285,7 +285,8 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
         }
     }
 
-    private async Task SetAppFilters(string[]? includeApps, string[]? excludeApps, CancellationToken cancellationToken)
+    [SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
+    private async Task SetAppFilters(IEnumerable<string>? includeApps, IEnumerable<string>? excludeApps, CancellationToken cancellationToken)
     {
         var appPackageId = AppPackageId;
 
@@ -298,13 +299,13 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
 
         // make sure current app is in the allowed list
         if (includeApps != null) {
-            includeApps = includeApps.Concat([appPackageId]).Distinct().ToArray();
+            includeApps = includeApps.Concat([appPackageId]).Distinct();
             await SetAllowedApps(includeApps, cancellationToken);
         }
 
         // make sure current app is not in the disallowed list
         if (excludeApps != null) {
-            excludeApps = excludeApps.Where(x => x != appPackageId).Distinct().ToArray();
+            excludeApps = excludeApps.Where(x => x != appPackageId).Distinct();
             await SetDisallowedApps(excludeApps, cancellationToken);
         }
     }
@@ -405,6 +406,7 @@ public abstract class TunVpnAdapter : PacketTransport, IVpnAdapter
         return true;
     }
 
+    //todo: protect socker
     private static IPAddress? DiscoverPrimaryAdapterIp(AddressFamily addressFamily)
     {
         // not matter is it reachable or not, just try to get the primary adapter IP which can route to the internet

@@ -6,6 +6,7 @@ using VpnHood.Core.Server;
 using VpnHood.Core.Server.Access.Managers.FileAccessManagement;
 using VpnHood.Core.Toolkit.Utils;
 using VpnHood.Test.AccessManagers;
+using VpnHood.Test.Extensions;
 
 namespace VpnHood.Test.Dom;
 
@@ -22,7 +23,8 @@ internal class ClientServerDom : IAsyncDisposable
     public long OldServerSentByteCount { get; private set; }
     public long OldServerReceivedByteCount { get; private set; }
 
-    private ClientServerDom(Token token,
+    private ClientServerDom(
+        Token token,
         VpnHoodClient client,
         VpnHoodServer server,
         TestAccessManager accessManager,
@@ -48,7 +50,7 @@ internal class ClientServerDom : IAsyncDisposable
 
         // check ClientPublicAddress in server
         Assert.AreEqual(fileAccessManagerOptions.TcpEndPointsValue.First().Address,
-            client.SessionInfo?.ClientPublicIpAddress);
+            client.Session?.Config.SessionInfo.ClientPublicIpAddress);
 
         Collect();
     }

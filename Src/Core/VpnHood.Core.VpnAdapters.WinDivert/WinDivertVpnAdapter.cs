@@ -23,7 +23,7 @@ public class WinDivertVpnAdapter(WinDivertVpnAdapterSettings adapterSettings) :
     private WinDivertDevice? _device;
     private WinDivertHeader? _lastCaptureHeader;
     private readonly List<IpNetwork> _includeIpNetworks = [];
-    private IPAddress[] _dnsServers = [];
+    private IReadOnlyList<IPAddress> _dnsServers = [];
 
     private readonly TimeoutDictionary<ushort, TimeoutItem<IPAddress>>
         _lastDnsServersV4 = new(TimeSpan.FromSeconds(30));
@@ -115,9 +115,9 @@ public class WinDivertVpnAdapter(WinDivertVpnAdapterSettings adapterSettings) :
     }
 
 
-    protected override Task SetDnsServers(IPAddress[] dnsServers, CancellationToken cancellationToken)
+    protected override Task SetDnsServers(IEnumerable<IPAddress> dnsServers, CancellationToken cancellationToken)
     {
-        _dnsServers = dnsServers;
+        _dnsServers = dnsServers.ToList();
         return Task.CompletedTask;
     }
 
@@ -127,10 +127,10 @@ public class WinDivertVpnAdapter(WinDivertVpnAdapterSettings adapterSettings) :
         return Task.CompletedTask;
     }
 
-    protected override Task SetAllowedApps(string[] packageIds, CancellationToken cancellationToken) =>
+    protected override Task SetAllowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken) =>
         throw new NotSupportedException("App filtering is not supported on LinuxTun.");
 
-    protected override Task SetDisallowedApps(string[] packageIds, CancellationToken cancellationToken) =>
+    protected override Task SetDisallowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken) =>
         throw new NotSupportedException("App filtering is not supported on LinuxTun.");
 
     protected override Task AddAddress(IpNetwork ipNetwork, CancellationToken cancellationToken)
@@ -277,7 +277,7 @@ public class WinDivertVpnAdapter(WinDivertVpnAdapterSettings adapterSettings) :
         if (!_simulateDns)
             return;
 
-        if (ipPacket.Protocol != IpProtocol.Udp || _dnsServers.Length == 0)
+        if (ipPacket.Protocol != IpProtocol.Udp || _dnsServers.Any())
             return;
 
         var udpPacket = ipPacket.ExtractUdp();

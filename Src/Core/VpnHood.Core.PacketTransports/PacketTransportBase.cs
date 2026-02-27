@@ -50,6 +50,8 @@ public abstract class PacketTransportBase : IPacketTransport
     protected virtual void OnPacketReceived(IpPacket ipPacket)
     {
         try {
+            ObjectDisposedException.ThrowIf(IsDisposed || IsDisposing, this);
+
             _stat.LastReceivedTime = FastDateTime.Now;
             _stat.ReceivedBytes += ipPacket.PacketLength;
             _stat.ReceivedPackets++;
@@ -65,8 +67,7 @@ public abstract class PacketTransportBase : IPacketTransport
 
     private async ValueTask SendPacketQueuedPassthroughAsync(IpPacket ipPacket)
     {
-        if (IsDisposed || IsDisposing)
-            throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(IsDisposed || IsDisposing, this);
 
         _singlePacketBuffer[0] = ipPacket;
         await SendPacketsInternalAsync(_singlePacketBuffer);
@@ -74,8 +75,7 @@ public abstract class PacketTransportBase : IPacketTransport
 
     public ValueTask SendPacketQueuedAsync(IpPacket ipPacket)
     {
-        if (IsDisposed || IsDisposing)
-            throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(IsDisposed || IsDisposing, this);
 
         return _passthrough ? SendPacketQueuedPassthroughAsync(ipPacket) : _sendChannel.Writer.WriteAsync(ipPacket);
     }
@@ -84,8 +84,7 @@ public abstract class PacketTransportBase : IPacketTransport
 
     public bool SendPacketQueued(IpPacket ipPacket)
     {
-        if (IsDisposed || IsDisposing)
-            throw new ObjectDisposedException(GetType().Name);
+        ObjectDisposedException.ThrowIf(IsDisposed || IsDisposing, this);
 
         LogPacket(ipPacket, "Sending a packet to queue.");
         if (_passthrough) {
@@ -95,7 +94,7 @@ public abstract class PacketTransportBase : IPacketTransport
                 if (!ret.IsCompleted)
                     throw new InvalidOperationException(
                         "A passthrough PacketTransport should not return an incomplete task.");
-                return ret.Result;
+                return ret.GetAwaiter().GetResult();
             }
         }
 

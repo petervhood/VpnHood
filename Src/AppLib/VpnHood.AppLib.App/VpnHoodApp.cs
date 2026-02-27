@@ -166,7 +166,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             IsDebugMode = options.IsDebugMode,
             CustomData = options.CustomData,
             PremiumFeatures = options.PremiumFeatures,
-            IsAdSupported = options.AdProviderItems.Length > 0,
+            IsAdSupported = options.AdProviderItems.Any(),
             IsProxySupported = true
         };
 
@@ -389,8 +389,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
                 LogExists = _logService.Exists,
                 IsDiagnosing = _appPersistState.HasDiagnoseRequested && !IsIdle,
                 HasDiagnoseRequested = _appPersistState.HasDiagnoseRequested,
-                ClientCountryCode = Services.LocationService.GetClientCountryCode(false), // split country don't follow server location
-                ClientCountryName = VhUtils.TryGetCountryName(Services.LocationService.GetClientCountryCode(false)), // split country don't follow server location
+                ClientCountryInfo = Services.LocationService.TryGetClientCountryInfo(),
                 ConnectRequestTime = _appPersistState.ConnectRequestTime,
                 CurrentUiCultureInfo = new UiCultureInfo(CultureInfo.DefaultThreadCurrentUICulture ?? SystemUiCulture),
                 SystemUiCultureInfo = new UiCultureInfo(SystemUiCulture),
@@ -457,7 +456,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             if (clientState == ClientState.Waiting)
                 return AppConnectionState.Waiting;
 
-            if (clientState is ClientState.WaitingForAd or ClientState.WaitingForAdEx)
+            if (clientState is ClientState.WaitingForAd)
                 return AdManager.IsWaitingForPostDelay ? AppConnectionState.Connected : AppConnectionState.WaitingForAd;
 
             if (clientState == ClientState.ValidatingProxies)
@@ -725,8 +724,8 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
                 UnstableTimeout = _unstableTimeout,
                 AutoWaitTimeout = _autoWaitTimeout,
                 IncludeLocalNetwork = UserSettings.IncludeLocalNetwork && Features.IsLocalNetworkSupported,
-                IncludeIpRanges = (await GetIncludeIpRanges(cancellationToken)).ToArray(),
-                VpnAdapterIncludeIpRanges = vpnAdapterIpRanges.ToArray(),
+                IncludeIpRangesByApp = (await GetIncludeIpRanges(cancellationToken)).ToArray(),
+                IncludeIpRangesByDevice = vpnAdapterIpRanges.ToArray(),
                 MaxPacketChannelCount = UserSettings.MaxPacketChannelCount,
                 ConnectTimeout = _tcpTimeout,
                 ServerQueryTimeout = _serverQueryTimeout,
@@ -739,7 +738,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
                 PlanId = planId,
                 AccessCode = accessCode,
                 IsTcpProxySupported = Features.IsTcpProxySupported,
-                DomainFilter = UserSettings.DomainFilter,
+                DomainFilterPolicy = UserSettings.DomainFilterPolicy,
                 AllowAnonymousTracker = UserSettings.AllowAnonymousTracker,
                 AllowEndPointTracker = UserSettings.AllowAnonymousTracker && _allowEndPointTracker,
                 AllowTcpReuse = !HasDebugCommand(DebugCommands.NoTcpReuse),
@@ -1003,7 +1002,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
 
             _connectTimeoutCts.CancelAfter(TimeSpan.FromMinutes(15));
             var connectionInfo = ConnectionInfo;
-            var useFallback = connectionInfo.ClientState is ClientState.WaitingForAdEx;
+            var useFallback = connectionInfo.SessionStatus?.IsAdapterStarted is true;
             await AdManager.ShowAd(
                 connectionInfo.SessionInfo.SessionId, connectionInfo.SessionInfo.AdRequirement,
                 useFallback: useFallback, _showAdCts.Token);

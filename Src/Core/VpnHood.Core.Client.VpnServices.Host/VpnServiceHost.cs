@@ -4,6 +4,7 @@ using VpnHood.Core.Client.Abstractions;
 using VpnHood.Core.Client.Abstractions.Exceptions;
 using VpnHood.Core.Client.VpnServices.Abstractions;
 using VpnHood.Core.Client.VpnServices.Abstractions.Tracking;
+using VpnHood.Core.Filtering.Abstractions;
 using VpnHood.Core.Toolkit.ApiClients;
 using VpnHood.Core.Toolkit.Logging;
 using VpnHood.Core.Toolkit.Sockets;
@@ -18,6 +19,7 @@ public class VpnServiceHost : IDisposable
     private readonly ApiController _apiController;
     private readonly IVpnServiceHandler _vpnServiceHandler;
     private readonly ISocketFactory _socketFactory;
+    private readonly NetFilter? _netFilter;
     private readonly LogService? _logService;
     private CancellationTokenSource _connectCts = new();
     private readonly TimeSpan _killServiceTimeout = TimeSpan.FromSeconds(3);
@@ -32,14 +34,15 @@ public class VpnServiceHost : IDisposable
     internal VpnServiceContext Context { get; }
     public static ConnectionInfo DefaultConnectionInfo => VpnServiceContext.DefaultConnectionInfo;
 
-    public VpnServiceHost(
-        string configFolder,
+    public VpnServiceHost(string configFolder,
         IVpnServiceHandler vpnServiceHandler,
         ISocketFactory socketFactory,
+        NetFilter? netFilter,
         bool withLogger = true)
     {
         Context = new VpnServiceContext(configFolder);
         _socketFactory = socketFactory;
+        _netFilter = netFilter;
         _vpnServiceHandler = vpnServiceHandler;
 
         // initialize logger
@@ -59,12 +62,12 @@ public class VpnServiceHost : IDisposable
     private void VpnHoodClient_StateChanged(object? sender, EventArgs e)
     {
         var client = (VpnHoodClient?)sender;
-        if (client == null)
-            return;
+        if (client is null || Client != client)
+            return; // the active client is changed, so ignore the event
 
         // update last sate
         VhLogger.Instance.LogDebug("VpnService update the connection info file. State:{State}, LastError: {LastError}",
-            client.State, client.LastException?.Message);
+            client.State, client.Session?.Status.Error);
         _ = UpdateConnectionInfo(client, CancellationToken.None);
 
         // if client is not disposed, we can show notification
@@ -93,33 +96,29 @@ public class VpnServiceHost : IDisposable
 
         try {
             _disconnectRequested = false;
+            var oldClient= Client;
 
             // handle previous client
-            var client = Client;
-            if (!forceReconnect && client is
-                    { State: ClientState.Connected or ClientState.Connecting or ClientState.Waiting }) {
-                // user must disconnect first
-                VhLogger.Instance.LogWarning("VpnService connection is already in progress.");
-                await UpdateConnectionInfo(client, _connectCts.Token).Vhc();
-                return false;
+            if (oldClient != null) {
+                if (!forceReconnect && oldClient is not { State: ClientState.Disposed or ClientState.Disconnecting }) {
+                    // user must disconnect first
+                    VhLogger.Instance.LogWarning("VpnService connection is already in progress.");
+                    await UpdateConnectionInfo(oldClient, _connectCts.Token).Vhc();
+                    return false;
+                }
+
+                // this prevents the previous connection to overwrite the state or stop the service
+                VhLogger.Instance.LogWarning("VpnService is killing the previous connection.");
+                oldClient.StateChanged -= VpnHoodClient_StateChanged;
+                Client = null; // double sure to prevent the event handler considered as active client. 
+
+                // dispose old client in the background
+                _ = oldClient.DisposeAsync();
             }
 
             // cancel previous connection if exists
             await _connectCts.TryCancelAsync();
             _connectCts.Dispose();
-
-            if (client != null) {
-                VhLogger.Instance.LogWarning("VpnService killing the previous connection.");
-
-                // this prevents the previous connection to overwrite the state or stop the service
-                client.StateChanged -= VpnHoodClient_StateChanged;
-
-                // ReSharper disable once MethodHasAsyncOverload
-                // Don't call disposeAsync here. We don't need graceful shutdown.
-                // Graceful shutdown should be handled by disconnect or by client itself.
-                client.Dispose();
-                Client = null;
-            }
 
             // start connecting 
             _connectCts = new CancellationTokenSource();
@@ -136,7 +135,9 @@ public class VpnServiceHost : IDisposable
 
     private async Task Connect(bool isAlwaysOn, CancellationToken cancellationToken)
     {
-        VpnHoodClient? client = null;
+        if (Client is not null)
+            throw new InvalidOperationException("Client is already initialized.");
+        
         try {
             // read client options and start log service
             var clientOptions = Context.ReadClientOptions();
@@ -179,35 +180,38 @@ public class VpnServiceHost : IDisposable
                 AutoDisposePackets = true
             };
 
-            client = new VpnHoodClient(
+            // assign Client member to monitor states while connecting, even if the client is not connected yet.
+            // This is important to update the connection info file and notification correctly.
+            Client = new VpnHoodClient(
                 vpnAdapter: clientOptions.UseNullCapture
                     ? new NullVpnAdapter(autoDisposePackets: true, blocking: false)
                     : _vpnServiceHandler.CreateAdapter(adapterSetting, clientOptions.DebugData1),
                 storageFolder: Context.ConfigFolder,
+                netFilter: _netFilter,
                 tracker: tracker,
                 socketFactory: _socketFactory,
                 options: clientOptions
             );
-            client.StateChanged += VpnHoodClient_StateChanged;
-            Client = client;
+            Client.StateChanged += VpnHoodClient_StateChanged;
 
             // show notification.
-            await UpdateConnectionInfo(client, cancellationToken).Vhc();
+            await UpdateConnectionInfo(Client, cancellationToken).Vhc();
             _vpnServiceHandler.ShowNotification(Context.ConnectionInfo);
 
             // let connect in the background
             // ignore cancellation because it will be cancelled by disconnect or dispose
-            await client.Connect(cancellationToken).Vhc();
+            await Client.Connect(cancellationToken).Vhc();
         }
-        catch (Exception ex) {
-            if (client != null)
-                await UpdateConnectionInfo(client, ex, _connectCts.Token).Vhc();
-            else
-                await UpdateConnectionInfo(ClientState.Disposed, null, ex, _connectCts.Token).Vhc();
-
+        catch (Exception ex) when (Client is null) {
+            await UpdateConnectionInfo(ClientState.Disposed, null, ex, _connectCts.Token).Vhc();
             _vpnServiceHandler.StopNotification();
             _vpnServiceHandler.StopSelf();
-            throw;
+        }
+        catch (Exception) {
+            // we do not need to do anything if client is not null because the state changed event
+            // will handle the notification and service stopping.
+            // dispose the client in the background
+            _ = Client?.DisposeAsync();
         }
     }
 
@@ -222,8 +226,8 @@ public class VpnServiceHost : IDisposable
             CreatedTime = FastDateTime.Now,
             ProxyManagerStatus = client.ProxyEndPointManager.Status,
             SessionName = client.Config.SessionName,
-            SessionInfo = client.SessionInfo,
-            SessionStatus = client.SessionStatus?.ToDto(),
+            SessionInfo = client.Session?.Config.SessionInfo,
+            SessionStatus = client.Session?.Status.ToDto(),
             ClientState = client.State,
             ClientStateProgress = client.StateProgress,
             ClientStateChangedTime = client.StateChangedTime,
@@ -287,7 +291,6 @@ public class VpnServiceHost : IDisposable
                 VhLogger.Instance.LogError(exception, "VpnServiceHost is disconnecting due to an error...");
             else
                 VhLogger.Instance.LogDebug(exception, "VpnServiceHost is disconnecting...");
-
 
             // let dispose in the background
             var client = Client;

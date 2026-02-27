@@ -162,7 +162,7 @@ public class AndroidVpnAdapter(VpnService vpnService, AndroidVpnAdapterSettings 
         return Task.CompletedTask;
     }
 
-    protected override Task SetDnsServers(IPAddress[] dnsServers, CancellationToken cancellationToken)
+    protected override Task SetDnsServers(IEnumerable<IPAddress> dnsServers, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(_builder);
         foreach (var dnsServer in dnsServers)
@@ -174,7 +174,7 @@ public class AndroidVpnAdapter(VpnService vpnService, AndroidVpnAdapterSettings 
     protected override string AppPackageId =>
         vpnService.ApplicationContext?.PackageName ?? throw new Exception("Could not get the app PackageName!");
 
-    protected override Task SetAllowedApps(string[] packageIds, CancellationToken cancellationToken)
+    protected override Task SetAllowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken)
     {
         _ = cancellationToken;
 
@@ -190,7 +190,7 @@ public class AndroidVpnAdapter(VpnService vpnService, AndroidVpnAdapterSettings 
         return Task.CompletedTask;
     }
 
-    protected override Task SetDisallowedApps(string[] packageIds, CancellationToken cancellationToken)
+    protected override Task SetDisallowedApps(IEnumerable<string> packageIds, CancellationToken cancellationToken)
     {
         _ = cancellationToken;
 

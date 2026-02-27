@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using Microsoft.Extensions.Logging;
 using VpnHood.AppLib.ClientProfiles;
 using VpnHood.AppLib.Exceptions;
 using VpnHood.AppLib.Test.Providers;
@@ -7,12 +6,7 @@ using VpnHood.AppLib.WebServer.Helpers;
 using VpnHood.Core.Client.Abstractions.Exceptions;
 using VpnHood.Core.Common.Exceptions;
 using VpnHood.Core.Common.Messaging;
-using VpnHood.Core.Toolkit.Logging;
-using VpnHood.Core.Toolkit.Net;
 using VpnHood.Core.Toolkit.Utils;
-using VpnHood.Core.Tunneling;
-using VpnHood.Test;
-using VpnHood.Test.Device;
 using WatsonWebserver.Core;
 using WatsonWebserver.Lite;
 using HttpMethod = WatsonWebserver.Core.HttpMethod;
@@ -114,113 +108,6 @@ public class ClientAppTest : TestAppBase
             await TestHelper.Test_Https(throwError: false, timeout: TimeSpan.FromMilliseconds(100));
             return app.State.ConnectionState;
         });
-    }
-
-    [TestMethod]
-    [DataRow(true)]
-    [DataRow(false)]
-    public async Task IpFilters(bool include)
-    {
-        var device = TestHelper.CreateDevice(new TestVpnAdapterOptions {
-            SimulateDns = false
-        });
-
-        // Create Server
-        await using var server = await TestHelper.CreateServer(socketFactory: device.SocketFactory);
-        var token = TestHelper.CreateAccessToken(server);
-
-        // create app
-        await using var app = TestAppHelper.CreateClientApp(device: device);
-        var clientProfile = app.ClientProfileService.ImportAccessKey(token.ToAccessKey());
-
-        // add url2 and endpoint 2
-        var httpsExternalUriIps = await Dns.GetHostAddressesAsync(TestConstants.HttpsExternalUri1.Host);
-        var customIps = httpsExternalUriIps.Select(x => new IpRange(x)).ToList();
-        customIps.Add(new IpRange(TestConstants.NsEndPoint1.Address));
-        customIps.Add(new IpRange(TestConstants.PingV4Address1));
-
-        // ************
-        // *** TEST ***: Test Include ip filter
-        if (include) {
-            app.SettingsService.SplitByIpSettings.AppIncludes = customIps.ToText();
-            app.SettingsService.SplitByIpSettings.AppExcludes = "";
-            await app.Connect(clientProfile.ClientProfileId);
-            await app.WaitForState(AppConnectionState.Connected);
-            await TestHelper.Test_Ping(ipAddress: TestConstants.PingV4Address1);
-
-            VhLogger.Instance.LogDebug(GeneralEventId.Test, "Starting IpFilters_TestInclude...");
-            await IpFilters_AssertInclude(TestHelper, app, TestConstants.NsEndPoint1, TestConstants.HttpsExternalUri1);
-            await IpFilters_AssertExclude(TestHelper, app, TestConstants.NsEndPoint2, TestConstants.HttpsExternalUri2);
-            await app.Disconnect();
-        }
-
-        // ************
-        // *** TEST ***: Test Exclude ip filters
-        if (!include) {
-            app.SettingsService.SplitByIpSettings.AppIncludes = "";
-            app.SettingsService.SplitByIpSettings.AppExcludes = customIps.ToText();
-            await app.Connect(clientProfile.ClientProfileId);
-            await app.WaitForState(AppConnectionState.Connected);
-
-            VhLogger.Instance.LogDebug(GeneralEventId.Test, "Starting IpFilters_TestExclude...");
-            await IpFilters_AssertInclude(TestHelper, app, TestConstants.NsEndPoint2, TestConstants.HttpsExternalUri2);
-            await IpFilters_AssertExclude(TestHelper, app, TestConstants.NsEndPoint1, TestConstants.HttpsExternalUri1);
-            await app.Disconnect();
-        }
-    }
-
-    public static async Task IpFilters_AssertInclude(TestHelper testHelper, VpnHoodApp app, IPEndPoint? nameserver,
-        Uri? url, int delta = 200)
-    {
-        // NameServer
-        if (nameserver != null) {
-            var oldSessionTraffic = app.GetSessionStatus().SessionTraffic;
-            var oldSplitTraffic = app.GetSessionStatus().SessionSplitTraffic;
-            await testHelper.Test_UdpByDNS(nameserver);
-            Assert.AreNotEqual(oldSessionTraffic, app.GetSessionStatus().SessionTraffic);
-            Assert.AreEqual(oldSplitTraffic, app.GetSessionStatus().SessionSplitTraffic);
-        }
-
-        // Http
-        if (url != null) {
-            var oldSessionTraffic = app.GetSessionStatus().SessionTraffic;
-            var oldSplitTraffic = app.GetSessionStatus().SessionSplitTraffic;
-            await testHelper.Test_Https(url);
-            Assert.AreNotEqual(oldSessionTraffic.Received, app.GetSessionStatus().SessionTraffic.Received,
-                delta: delta);
-            Assert.AreNotEqual(oldSessionTraffic.Sent, app.GetSessionStatus().SessionTraffic.Sent, delta: delta);
-            Assert.AreEqual(oldSplitTraffic.Received, app.GetSessionStatus().SessionSplitTraffic.Received,
-                delta: delta);
-            Assert.AreEqual(oldSplitTraffic.Sent, app.GetSessionStatus().SessionSplitTraffic.Sent, delta: delta);
-        }
-    }
-
-    public static async Task IpFilters_AssertExclude(TestHelper testHelper, VpnHoodApp app,
-        IPEndPoint? nameserver, Uri? url, int delta = 200)
-    {
-        // NameServer
-        if (nameserver != null) {
-            var oldSessionTraffic = app.GetSessionStatus().SessionTraffic;
-            var oldSplitTraffic = app.GetSessionStatus().SessionSplitTraffic;
-            await testHelper.Test_UdpByDNS(nameserver);
-            Assert.AreEqual(oldSessionTraffic, app.GetSessionStatus().SessionTraffic,
-                $"Udp to {nameserver} should go to tunnel.");
-
-            Assert.AreNotEqual(oldSplitTraffic, app.GetSessionStatus().SessionSplitTraffic,
-                $"Udp to {nameserver} should not be split.");
-        }
-
-        // Http
-        if (url != null) {
-            var oldSessionTraffic = app.GetSessionStatus().SessionTraffic;
-            var oldSplitTraffic = app.GetSessionStatus().SessionSplitTraffic;
-            await testHelper.Test_Https(url);
-            Assert.AreEqual(oldSessionTraffic.Received, app.GetSessionStatus().SessionTraffic.Received, delta: delta);
-            Assert.AreEqual(oldSessionTraffic.Sent, app.GetSessionStatus().SessionTraffic.Sent, delta: delta);
-            Assert.AreNotEqual(oldSplitTraffic.Received, app.GetSessionStatus().SessionSplitTraffic.Received,
-                delta: delta);
-            Assert.AreNotEqual(oldSplitTraffic.Sent, app.GetSessionStatus().SessionSplitTraffic.Sent, delta: delta);
-        }
     }
 
 
@@ -416,75 +303,6 @@ public class ClientAppTest : TestAppBase
             "Could not connect to new server!");
     }
 
-    [TestMethod]
-    public async Task IncludeDomains()
-    {
-        // first create device to access its socket factory
-        var vpnAdapterOptions = TestHelper.CreateTestVpnAdapterOptions();
-        var device = TestHelper.CreateDevice(vpnAdapterOptions);
-
-        // Create Server
-        await using var server = await TestHelper.CreateServer(socketFactory: device.SocketFactory);
-
-        // create app
-        await using var app = TestAppHelper.CreateClientApp(device: device);
-        app.UserSettings.DomainFilter.Excludes = [TestConstants.HttpsExternalUri1.Host];
-
-        // connect
-        var token = TestHelper.CreateAccessToken(server);
-        var clientProfile = app.ClientProfileService.ImportAccessKey(token.ToAccessKey());
-        await app.Connect(clientProfile.ClientProfileId);
-        await app.WaitForState(AppConnectionState.Connected);
-
-        // text include
-        var oldTcpTunnelledCount = app.GetSessionStatus().TcpTunnelledCount;
-        var oldTcpPassthruCount = app.GetSessionStatus().TcpPassthruCount;
-        await TestHelper.Test_Https(uri: TestConstants.HttpsExternalUri1);
-        Assert.AreEqual(oldTcpTunnelledCount, app.GetSessionStatus().TcpTunnelledCount);
-        Assert.AreEqual(oldTcpPassthruCount + 1, app.GetSessionStatus().TcpPassthruCount);
-
-        // text exclude
-        oldTcpTunnelledCount = app.GetSessionStatus().TcpTunnelledCount;
-        oldTcpPassthruCount = app.GetSessionStatus().TcpPassthruCount;
-        await TestHelper.Test_Https(uri: TestConstants.HttpsExternalUri2);
-        Assert.AreEqual(oldTcpTunnelledCount + 1, app.GetSessionStatus().TcpTunnelledCount);
-        Assert.AreEqual(oldTcpPassthruCount, app.GetSessionStatus().TcpPassthruCount);
-    }
-
-    [TestMethod]
-    public async Task ExcludeDomains()
-    {
-        // first create device to access its socket factory
-        var vpnAdapterOptions = TestHelper.CreateTestVpnAdapterOptions();
-        var device = TestHelper.CreateDevice(vpnAdapterOptions);
-
-        // Create Server
-        await using var server = await TestHelper.CreateServer(socketFactory: device.SocketFactory);
-
-        // create app
-        await using var app = TestAppHelper.CreateClientApp(device: device);
-        app.UserSettings.DomainFilter.Excludes = [TestConstants.HttpsExternalUri1.Host];
-
-        // connect
-        var token = TestHelper.CreateAccessToken(server);
-        var clientProfile = app.ClientProfileService.ImportAccessKey(token.ToAccessKey());
-        await app.Connect(clientProfile.ClientProfileId);
-        await app.WaitForState(AppConnectionState.Connected);
-
-        // text include
-        var oldTcpTunnelledCount = app.GetSessionStatus().TcpTunnelledCount;
-        var oldTcpPassthruCount = app.GetSessionStatus().TcpPassthruCount;
-        await TestHelper.Test_Https(uri: TestConstants.HttpsUri2);
-        Assert.AreEqual(oldTcpTunnelledCount + 1, app.GetSessionStatus().TcpTunnelledCount);
-        Assert.AreEqual(oldTcpPassthruCount, app.GetSessionStatus().TcpPassthruCount);
-
-        // text exclude
-        oldTcpTunnelledCount = app.GetSessionStatus().TcpTunnelledCount;
-        oldTcpPassthruCount = app.GetSessionStatus().TcpPassthruCount;
-        await TestHelper.Test_Https(uri: TestConstants.HttpsExternalUri1);
-        Assert.AreEqual(oldTcpTunnelledCount, app.GetSessionStatus().TcpTunnelledCount);
-        Assert.AreEqual(oldTcpPassthruCount + 1, app.GetSessionStatus().TcpPassthruCount);
-    }
 
     [TestMethod]
     public async Task Premium_token_must_create_premium_session()
@@ -560,12 +378,12 @@ public class ClientAppTest : TestAppBase
         accessManager.UserReviewRecommended = 2;
 
         await TestHelper.Test_Https(throwError: false, timeout: TimeSpan.FromMilliseconds(100));
-        await VhTestUtil.AssertEqualsWait(1, () => 
-            server.SessionManager.Sync(true, TestCancellationToken));
+        await VhTestUtil.AssertEqualsWait(1, () =>
+            server.SessionManager.Sync(true, TestCt));
         await TestHelper.Test_Https(throwError: false, timeout: TimeSpan.FromMilliseconds(100));
-        await VhTestUtil.AssertEqualsWait(1, 
-            () => server.SessionManager.Sync(true, TestCancellationToken));
-        await app.ForceUpdateState(TestCancellationToken);
+        await VhTestUtil.AssertEqualsWait(1,
+            () => server.SessionManager.Sync(true, TestCt));
+        await app.ForceUpdateState(TestCt);
 
         // after client disconnect it should see rating recommended
         await app.Disconnect();
@@ -583,7 +401,7 @@ public class ClientAppTest : TestAppBase
 
         // Connect again then access manager should receive result
         Assert.IsNull(accessManager.UserReview);
-        await app.Connect(clientProfile.ClientProfileId);
+        await app.Connect(clientProfile.ClientProfileId, cancellationToken: TestCt);
         Assert.IsNotNull(accessManager.UserReview);
         Assert.AreEqual(3, accessManager.UserReview.Rating);
         Assert.AreEqual(app.Features.Version, accessManager.UserReview.AppVersion);

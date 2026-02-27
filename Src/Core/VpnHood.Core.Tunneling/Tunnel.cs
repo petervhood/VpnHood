@@ -1,6 +1,7 @@
 ﻿using VpnHood.Core.Common.Messaging;
 using VpnHood.Core.Packets;
 using VpnHood.Core.Packets.Extensions;
+using VpnHood.Core.Toolkit.Net;
 using VpnHood.Core.PacketTransports;
 using VpnHood.Core.Toolkit.Jobs;
 using VpnHood.Core.Toolkit.Utils;
@@ -18,13 +19,11 @@ public class Tunnel : PassthroughPacketTransport
     private readonly Lock _speedLock = new();
     private readonly Job? _speedometerJob;
 
-    public void AddChannel(IChannel channel) => _channelManager.AddChannel(channel);
     public DateTime LastActivityTime { get; private set; } = FastDateTime.Now;
     public Traffic Traffic => _channelManager.Traffic;
     public int PacketChannelCount => _channelManager.PacketChannelCount;
     public int StreamProxyChannelCount => _channelManager.ProxyChannelCount;
-    public void RemoveAllPacketChannels() => _channelManager.RemoveAllPacketChannels();
-    public void RemoveAllChannels<T>() where T : IChannel => _channelManager.RemoveAllChannels<T>();
+    public void RemoveChannels<T>() where T : IChannel => _channelManager.RemoveChannels<T>();
 
     public int MaxPacketChannelCount {
         get => _channelManager.MaxPacketChannelCount;
@@ -54,6 +53,18 @@ public class Tunnel : PassthroughPacketTransport
             ? new Job(UpdateSpeedJob, _speedometerThreshold, "TunnelSpeedometer")
             : null;
     }
+
+    public void AddChannel(IChannel channel, bool disposeIfFailed = false)
+    {
+        try {
+            _channelManager.AddChannel(channel);
+        }
+        catch when (disposeIfFailed) {
+            channel.Dispose();
+            throw;
+        }
+    }
+
 
     private ValueTask UpdateSpeedJob(CancellationToken arg)
     {

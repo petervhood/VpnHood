@@ -1,46 +1,36 @@
-﻿using System.Net;
+﻿using Microsoft.Extensions.Logging;
+using System.Net;
 using System.Net.Sockets;
-using Microsoft.Extensions.Logging;
-using VpnHood.Core.Client.ConnectorServices;
-using VpnHood.Core.Common.Messaging;
-using VpnHood.Core.DomainFiltering;
 using VpnHood.Core.Packets;
 using VpnHood.Core.Packets.Extensions;
 using VpnHood.Core.Toolkit.Logging;
 using VpnHood.Core.Toolkit.Net;
 using VpnHood.Core.Toolkit.Utils;
 using VpnHood.Core.Tunneling;
-using VpnHood.Core.Tunneling.Channels;
-using VpnHood.Core.Tunneling.ClientStreams;
+using VpnHood.Core.Tunneling.Connections;
 using VpnHood.Core.Tunneling.Exceptions;
-using VpnHood.Core.Tunneling.Messaging;
 using VpnHood.Core.Tunneling.Utils;
 
 namespace VpnHood.Core.Client;
 
 internal class ClientHost(
-    VpnHoodClient vpnHoodClient,
-    DomainFilterService domainFilterService,
-    Tunnel tunnel,
+    ClientStreamHandler streamHandler,
     IPAddress catcherAddressIpV4,
-    IPAddress catcherAddressIpV6,
-    TransferBufferSize streamProxyBufferSize)
+    IPAddress catcherAddressIpV6)
     : IDisposable
 {
     private bool _disposed;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
-    private readonly ClientHostStat _stat = new();
     private readonly Nat _nat = new(true);
     private TcpListener? _tcpListenerIpV4;
     private TcpListener? _tcpListenerIpV6;
-    private IPEndPoint? _localEndpointIpV4;
-    private IPEndPoint? _localEndpointIpV6;
-    private int _processingCount;
+    private IPEndPoint? _localEndPointIpV4;
+    private IPEndPoint? _localEndPointIpV6;
 
     public IPAddress CatcherAddressIpV4 => catcherAddressIpV4;
     public IPAddress CatcherAddressIpV6 => catcherAddressIpV6;
-    public TransferBufferSize StreamProxyBufferSize => streamProxyBufferSize;
-    public IClientHostStat Stat => _stat;
+    public IReadOnlyList<IPAddress> CatcherAddressIps = [catcherAddressIpV4, catcherAddressIpV6];
+
     public event EventHandler<IpPacket>? PacketReceived;
 
     public void DropCurrentConnections()
@@ -66,18 +56,18 @@ internal class ClientHost(
         // IpV4
         _tcpListenerIpV4 = new TcpListener(IPAddress.Any, 0);
         _tcpListenerIpV4.Start();
-        _localEndpointIpV4 = (IPEndPoint)_tcpListenerIpV4.LocalEndpoint; //it is slow; make sure to cache it
+        _localEndPointIpV4 = (IPEndPoint)_tcpListenerIpV4.LocalEndpoint; //it is slow; make sure to cache it
         VhLogger.Instance.LogInformation("ClientHost is listening. EndPoint: {EndPoint}",
-            VhLogger.Format(_localEndpointIpV4));
+            VhLogger.Format(_localEndPointIpV4));
         _ = AcceptTcpClientLoop(_tcpListenerIpV4);
 
         // IpV6
         try {
             _tcpListenerIpV6 = new TcpListener(IPAddress.IPv6Any, 0);
             _tcpListenerIpV6.Start();
-            _localEndpointIpV6 = (IPEndPoint)_tcpListenerIpV6.LocalEndpoint; //it is slow; make sure to cache it
+            _localEndPointIpV6 = (IPEndPoint)_tcpListenerIpV6.LocalEndpoint; //it is slow; make sure to cache it
             VhLogger.Instance.LogInformation("ClientHost is listening. EndPoint: {EndPoint}",
-                VhLogger.Format(_localEndpointIpV6));
+                VhLogger.Format(_localEndPointIpV6));
             _ = AcceptTcpClientLoop(_tcpListenerIpV6);
         }
         catch (Exception ex) {
@@ -85,8 +75,6 @@ internal class ClientHost(
                 "Could not create a listener. EndPoint: {EndPoint}",
                 VhLogger.Format(new IPEndPoint(IPAddress.IPv6Any, 0)));
         }
-
-        // check available memory
     }
 
     private async Task AcceptTcpClientLoop(TcpListener tcpListener)
@@ -95,8 +83,11 @@ internal class ClientHost(
 
         try {
             while (!_cancellationTokenSource.IsCancellationRequested) {
+                // config tcpOrgClient
                 var tcpClient = await tcpListener.AcceptTcpClientAsync().Vhc();
-                _ = ProcessClient(tcpClient, _cancellationTokenSource.Token);
+                VhUtils.ConfigTcpClient(tcpClient, null, null);
+                var tcpConnection = new TcpConnection(tcpClient, isServer: false, connectionName: "app");
+                _ = ProcessConnection(tcpConnection, _cancellationTokenSource.Token);
             }
         }
         catch (Exception ex) {
@@ -115,12 +106,12 @@ internal class ClientHost(
         PacketLogger.LogPacket(ipPacket, "Processing a ClientHost packet...");
 
         // check packet type
-        if (_localEndpointIpV4 == null)
+        if (_localEndPointIpV4 == null)
             throw new InvalidOperationException(
-                $"{nameof(_localEndpointIpV4)} has not been initialized! Did you call Start!");
+                $"{nameof(_localEndPointIpV4)} has not been initialized! Did you call Start!");
 
         var catcherAddress = ipPacket.Version == IpVersion.IPv4 ? CatcherAddressIpV4 : CatcherAddressIpV6;
-        var localEndPoint = ipPacket.Version == IpVersion.IPv4 ? _localEndpointIpV4 : _localEndpointIpV6;
+        var localEndPoint = ipPacket.Version == IpVersion.IPv4 ? _localEndPointIpV4 : _localEndPointIpV6;
 
         try {
             var tcpPacket = ipPacket.ExtractTcp();
@@ -132,7 +123,7 @@ internal class ClientHost(
             // redirect to inbound
             if (catcherAddress.SpanEquals(ipPacket.DestinationAddressSpan)) {
                 var natItem = (NatItemEx?)_nat.Resolve(ipPacket.Version, ipPacket.Protocol, tcpPacket.DestinationPort)
-                              ?? throw new NatEndpointNotFoundException(
+                              ?? throw new NatEndPointNotFoundException(
                                   "Could not find incoming tcp destination in NAT.");
 
                 ipPacket.SourceAddress = natItem.DestinationAddress;
@@ -143,18 +134,15 @@ internal class ClientHost(
 
             // Redirect outbound to the local address
             else {
-                var syncCustomData = ProcessOutgoingSyncPacket(ipPacket, tcpPacket);
+                var sync = tcpPacket is { Synchronize: true, Acknowledgment: false };
 
                 // add to nat if it is sync packet
-                var natItem = syncCustomData != null
+                var natItem = sync
                     ? _nat.Add(ipPacket, true)
                     : _nat.Get(ipPacket) ??
-                      throw new NatEndpointNotFoundException("Could not find outgoing tcp destination in NAT.");
+                      throw new NatEndPointNotFoundException("Could not find outgoing tcp destination in NAT.");
 
-                // set customData
-                if (syncCustomData != null)
-                    natItem.CustomData = syncCustomData;
-
+                // rewrite packet by changing source/destination address and port
                 tcpPacket.SourcePort = natItem.NatId; // 1
                 ipPacket.DestinationAddress = ipPacket.SourceAddress; // 2
                 ipPacket.SourceAddress = catcherAddress; //3
@@ -164,151 +152,38 @@ internal class ClientHost(
             ipPacket.UpdateAllChecksums();
             PacketReceived?.Invoke(this, ipPacket);
         }
-        catch (NatEndpointNotFoundException ex) when (ipPacket.Protocol == IpProtocol.Tcp) {
+        catch (NatEndPointNotFoundException ex) when (ipPacket.Protocol == IpProtocol.Tcp) {
             var resultPacket = PacketBuilder.BuildTcpResetReply(ipPacket);
             PacketReceived?.Invoke(this, resultPacket);
             throw new PacketDropException("Packet dropped and TCP reset sent.", ex);
         }
     }
 
-    private SyncCustomData? ProcessOutgoingSyncPacket(IpPacket ipPacket, TcpPacket tcpPacket)
+    private async Task ProcessConnection(IConnection connection, CancellationToken cancellationToken)
     {
-        var sync = tcpPacket is { Synchronize: true, Acknowledgment: false };
-        if (!sync)
-            return null;
-
-        var syncCustomData = new SyncCustomData {
-            IsInIpRange = vpnHoodClient.IsInEpRange(ipPacket)
-        };
-
-        if (ipPacket.Version == IpVersion.IPv6)
-            ProcessOutgoingSyncIpV6Packet(syncCustomData);
-
-        return syncCustomData;
-    }
-
-    private void ProcessOutgoingSyncIpV6Packet(SyncCustomData syncCustomData)
-    {
-        if (domainFilterService.IsEnabled &&
-            (!vpnHoodClient.IsIpV6SupportedByServer || !vpnHoodClient.IsIpV6SupportedByClient))
-            throw new Exception("DomainFilter is on but IPv6 is not fully supported.");
-
-        if (syncCustomData.IsInIpRange && !vpnHoodClient.IsIpV6SupportedByServer)
-            throw new Exception("IPv6 is not supported by the server.");
-
-        if (!syncCustomData.IsInIpRange && !vpnHoodClient.IsIpV6SupportedByClient)
-            throw new Exception("IPv6 is not supported by the client.");
-    }
-
-    private async Task ProcessClient(TcpClient orgTcpClient, CancellationToken cancellationToken)
-    {
-        if (orgTcpClient is null) throw new ArgumentNullException(nameof(orgTcpClient));
-        ConnectorRequestResult<SessionResponse>? requestResult = null;
-        ProxyChannel? channel = null;
-        var ipVersion = IpVersion.IPv4;
-
         try {
-            // check cancellation
-            Interlocked.Increment(ref _processingCount);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // config tcpOrgClient
-            VhUtils.ConfigTcpClient(orgTcpClient, null, null);
-
             // get original remote from NAT
-            var orgRemoteEndPoint =
-                orgTcpClient.TryGetRemoteEndPoint() ??
-                throw new Exception("Could not get original remote endpoint from TcpClient.");
-
-            ipVersion = orgRemoteEndPoint.IpVersion();
+            var remoteEndPoint = connection.RemoteEndPoint;
+            var ipVersion = remoteEndPoint.IpVersion();
             var natItem =
-                (NatItemEx?)_nat.Resolve(ipVersion, IpProtocol.Tcp, (ushort)orgRemoteEndPoint.Port) ??
+                (NatItemEx?)_nat.Resolve(ipVersion, IpProtocol.Tcp, (ushort)remoteEndPoint.Port) ??
                 throw new Exception(
-                    $"Could not resolve original remote from NAT! RemoteEndPoint: {VhLogger.Format(orgRemoteEndPoint)}");
-
-            var syncCustomData = natItem.CustomData as SyncCustomData?;
-
-            // create a scope for the logger
-            using var scope = VhLogger.Instance.BeginScope("LocalPort: {LocalPort}, RemoteEp: {RemoteEp}",
-                natItem.SourcePort, VhLogger.Format(natItem.DestinationAddress) + ":" + natItem.DestinationPort);
-            VhLogger.Instance.LogDebug(GeneralEventId.ProxyChannel, "New TcpProxy Request.");
+                    $"Could not resolve original remote from NAT! RemotePort: {remoteEndPoint.Port}");
 
             // check invalid income
             var catcherAddress = ipVersion == IpVersion.IPv4 ? CatcherAddressIpV4 : CatcherAddressIpV6;
-            if (!Equals(orgRemoteEndPoint.Address, catcherAddress))
+            if (!Equals(connection.RemoteEndPoint.Address, catcherAddress))
                 throw new Exception("TcpProxy rejected an outbound connection!");
 
-            // Filter by SNI
-            var filterResult = await domainFilterService
-                .Process(orgTcpClient.GetStream(), natItem.DestinationAddress, cancellationToken)
-                .Vhc();
-
-            if (filterResult.Action == DomainFilterAction.Block) {
-                VhLogger.Instance.LogInformation(GeneralEventId.Sni,
-                    "Domain has been blocked. Domain: {Domain}",
-                    VhLogger.FormatHostName(filterResult.DomainName));
-
-                throw new Exception($"Domain has been blocked. Domain: {filterResult.DomainName}");
-            }
-
-            // Filter by IP
-            var isInIpRange = syncCustomData?.IsInIpRange ??
-                              vpnHoodClient.IsInEpRange(natItem.DestinationAddress, natItem.DestinationPort);
-            if (filterResult.Action == DomainFilterAction.Exclude ||
-                (!isInIpRange && filterResult.Action != DomainFilterAction.Include)) {
-                var channelId = UniqueIdFactory.Create() + ":client:passthrough";
-                await vpnHoodClient.AddPassthruTcpStream(
-                        new TcpClientStream(orgTcpClient, orgTcpClient.GetStream(), channelId + ":tunnel"),
-                        new IPEndPoint(natItem.DestinationAddress, natItem.DestinationPort),
-                        channelId, filterResult.ReadData, cancellationToken)
-                    .Vhc();
-
-                _stat.TcpPassthruCount++;
-                return;
-            }
-
-            // Create the Request
-            var request = new StreamProxyChannelRequest {
-                RequestId = UniqueIdFactory.Create(),
-                SessionId = vpnHoodClient.SessionId,
-                SessionKey = vpnHoodClient.SessionKey,
-                DestinationEndPoint = new IPEndPoint(natItem.DestinationAddress, natItem.DestinationPort)
-            };
-
-            // read the response
-            requestResult = await vpnHoodClient.SendRequest<SessionResponse>(request, cancellationToken).Vhc();
-            var proxyClientStream = requestResult.ClientStream;
-
-            // create a ProxyChannel
-            VhLogger.Instance.LogDebug(GeneralEventId.ProxyChannel,
-                "Adding a channel to session. SessionId: {SessionId}...", VhLogger.FormatId(request.SessionId));
-            var orgTcpClientStream =
-                new TcpClientStream(orgTcpClient, orgTcpClient.GetStream(),
-                    proxyClientStream.ClientStreamId.Replace(":tunnel", ":app"));
-
-            // flush initBuffer
-            await proxyClientStream.Stream.WriteAsync(filterResult.ReadData, cancellationToken);
-
-            // add stream proxy
-            channel = new ProxyChannel(request.RequestId, orgTcpClientStream, proxyClientStream, streamProxyBufferSize);
-            tunnel.AddChannel(channel);
-            _stat.TcpTunnelledCount++;
+            var hostEndPoint = new IPEndPoint(natItem.DestinationAddress, natItem.DestinationPort);
+            await streamHandler.ProcessConnection(connection, hostEndPoint, cancellationToken).Vhc();
         }
         catch (Exception ex) {
-            // disable IPv6 if detect the new network does not have IpV6
-            if (ipVersion == IpVersion.IPv6 &&
-                ex is SocketException { SocketErrorCode: SocketError.NetworkUnreachable })
-                vpnHoodClient.IsIpV6SupportedByClient = false;
-
-            channel?.Dispose();
-            requestResult?.Dispose();
-            orgTcpClient.Dispose();
-            VhLogger.LogError(GeneralEventId.ProxyChannel, ex, "");
-        }
-        finally {
-            Interlocked.Decrement(ref _processingCount);
+            VhLogger.Instance.LogError(GeneralEventId.Stream, ex, "Could not process a tcp stream request.");
+            await connection.DisposeAsync();
         }
     }
+  
 
     public void Dispose()
     {
@@ -324,16 +199,5 @@ internal class ClientHost(
         PacketReceived = null;
 
         _disposed = true;
-    }
-
-    private class ClientHostStat : IClientHostStat
-    {
-        public int TcpTunnelledCount { get; set; }
-        public int TcpPassthruCount { get; set; }
-    }
-
-    public struct SyncCustomData
-    {
-        public required bool IsInIpRange { get; init; }
     }
 }

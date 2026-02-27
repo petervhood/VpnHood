@@ -52,11 +52,11 @@ public class AndroidDevice : IDevice
                 if (!IsVisibleApp(packageManager, appInfo))
                     continue;
 
-                // 4. Load metadata
                 var appName = appInfo.LoadLabel(packageManager);
                 if (string.IsNullOrWhiteSpace(appName) || appName == appInfo.PackageName)
                     continue;
 
+                // Load icon
                 var icon = appInfo.LoadIcon(packageManager);
                 if (icon is null)
                     continue;
@@ -68,7 +68,12 @@ public class AndroidDevice : IDevice
                 });
             }
 
-            return deviceAppInfos.OrderBy(a => a.AppName).ToArray();
+            var result = deviceAppInfos
+                .OrderBy(a => a.AppName)
+                .DistinctBy(x => x.AppId)
+                .ToArray();
+
+            return result;
         }
     }
 
@@ -76,7 +81,9 @@ public class AndroidDevice : IDevice
     {
         var appId = appInfo.PackageName;
 
-        if (!appInfo.Enabled || string.IsNullOrWhiteSpace(appId))
+        // do not use IsEnabled as app may just suspend by the system
+
+        if (string.IsNullOrWhiteSpace(appId))
             return false;
 
         // Does it have a Launcher icon? (Most user apps)
@@ -87,8 +94,9 @@ public class AndroidDevice : IDevice
         if ((appInfo.Flags & ApplicationInfoFlags.UpdatedSystemApp) != 0)
             return true;
 
-        // Is it a known "Core" tool like Android Auto?
-        if (appId == "com.google.android.projection.gearhead")
+        // Is it a known "Core" tool ?
+        if (appId == "com.google.android.projection.gearhead" || // Android Auto
+            appId == "com.google.android.embedded.projection") // Embedded Projection
             return true;
 
         // Is it a non-system app?

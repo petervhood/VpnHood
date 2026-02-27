@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using VpnHood.Core.Common.Messaging;
 using VpnHood.Core.Packets;
 using VpnHood.Core.Packets.Extensions;
+using VpnHood.Core.Toolkit.Net;
 using VpnHood.Core.PacketTransports;
 using VpnHood.Core.Toolkit.Collections;
 using VpnHood.Core.Toolkit.Jobs;
@@ -82,7 +83,7 @@ public class UdpProxyPoolEx : PassthroughPacketTransport, IPacketProxyPool
                     return new TimeoutItem<bool>(true);
                 });
                 if (isNewRemoteEndPoint)
-                    _packetProxyCallbacks?.OnConnectionRequested(IpProtocol.Udp, destinationEndPoint);
+                    _packetProxyCallbacks?.OnConnectionRequested(IpProtocol.Udp, destinationEndPoint.ToValue());
 
                 // cleanup old workers
                 TimeoutItemUtil.CleanupTimeoutList(_udpProxies, _udpTimeout);
@@ -126,8 +127,8 @@ public class UdpProxyPoolEx : PassthroughPacketTransport, IPacketProxyPool
             // Raise new endpoint
             if (isNewLocalEndPoint || isNewRemoteEndPoint)
                 _packetProxyCallbacks?.OnConnectionEstablished(IpProtocol.Udp,
-                    localEndPoint: udpProxy.LocalEndPoint,
-                    remoteEndPoint: destinationEndPoint,
+                    localEndPoint: udpProxy.LocalEndPoint.ToValue(),
+                    remoteEndPoint: destinationEndPoint.ToValue(),
                     isNewLocalEndPoint: isNewLocalEndPoint,
                     isNewRemoteEndPoint: isNewRemoteEndPoint);
 
