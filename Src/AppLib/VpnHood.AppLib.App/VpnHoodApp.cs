@@ -258,6 +258,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
 
     private void ApplySettings()
     {
+        return;
         try {
             var oldUserSettings = SettingsService.OldUserSettings;
 
