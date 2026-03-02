@@ -1,18 +1,13 @@
 ﻿using Android.Runtime;
-using Microsoft.Extensions.Logging;
 using VpnHood.App.Client;
 using VpnHood.App.Connect.Droid.Google.FirebaseUtils;
 using VpnHood.AppLib;
-using VpnHood.AppLib.Abstractions;
-using VpnHood.AppLib.Droid.Ads.VhAdMob;
 using VpnHood.AppLib.Droid.Common;
 using VpnHood.AppLib.Droid.Common.Constants;
 using VpnHood.AppLib.Droid.GooglePlay;
 using VpnHood.AppLib.Services.Ads;
 using VpnHood.AppLib.Services.Updaters;
-using VpnHood.AppLib.Store;
 using VpnHood.Core.Client.VpnServices.Abstractions.Tracking;
-using VpnHood.Core.Toolkit.Logging;
 
 namespace VpnHood.App.Connect.Droid.Google;
 
@@ -47,8 +42,8 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
             UiName = "VpnHoodConnect",
             IsAddAccessKeySupported = false,
             UserReviewProvider = new GooglePlayInAppUserReviewProvider(AppConfigs.IsDebugMode),
-            AccountProvider = CreateAppAccountProvider(appConfigs, storageFolderPath),
-            AdProviderItems = CreateAppAdProviderItems(appConfigs),
+            AccountProvider = null,
+            AdProviderItems = [],
             AllowEndPointTracker = appConfigs.AllowEndPointTracker,
             AdjustForSystemBars = false,
             TrackerFactory = AppConfigs.IsDebug ? new NullTrackerFactory() : new FirebaseAnalyticsTrackerFactory(),
@@ -85,7 +80,7 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
             VpnHoodAndroidApp.Instance.Dispose();
     }
 
-    private static AppAdProviderItem[] CreateAppAdProviderItems(AppConfigs appConfigs)
+    /*private static AppAdProviderItem[] CreateAppAdProviderItems(AppConfigs appConfigs)
     {
         // ReSharper disable once UseObjectOrCollectionInitializer
         var items = new List<AppAdProviderItem>();
@@ -118,20 +113,20 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
                     appConfigs.InmobiAccountId, appConfigs.InmobiPlacementId, initializeTimeout, appConfigs.InmobiIsDebugMode),
                 ExcludeCountryCodes = ["CN", "RU"],
                 ProviderName = "InMobi"
-            });*/
+            });
 
-        //if (ChartboostAdProvider.IsAndroidVersionSupported)
-        //    items.Add(new AppAdProviderItem {
-        //        AdProvider = ChartboostAdProvider.Create(appConfigs.ChartboostAppId, appConfigs.ChartboostAppSignature,
-        //            appConfigs.ChartboostAdLocation, initializeTimeout),
-        //        ExcludeCountryCodes = ["IR", "CN"],
-        //        ProviderName = "Chartboost"
-        //    });
+        // if (ChartboostAdProvider.IsAndroidVersionSupported)
+        //     items.Add(new AppAdProviderItem {
+        //         AdProvider = ChartboostAdProvider.Create(appConfigs.ChartboostAppId, appConfigs.ChartboostAppSignature,
+        //             appConfigs.ChartboostAdLocation, initializeTimeout),
+        //         ExcludeCountryCodes = ["IR", "CN"],
+        //         ProviderName = "Chartboost"
+        //     });
 
         return items.ToArray();
-    }
+    }*/
 
-    private static IAppAccountProvider? CreateAppAccountProvider(AppConfigs appConfigs, string storageFolderPath)
+    /*private static IAppAccountProvider? CreateAppAccountProvider(AppConfigs appConfigs, string storageFolderPath)
     {
         try {
             var authenticationExternalProvider = new GooglePlayAuthenticationProvider(appConfigs.GoogleSignInClientId);
@@ -150,9 +145,9 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
             VhLogger.Instance.LogError(ex, "Could not create AppAccountService.");
             return null;
         }
-    }
+    }*/
 
-    private static IAppBillingProvider? TryCreateBillingClient(
+    /*private static IAppBillingProvider? TryCreateBillingClient(
         IAppAuthenticationProvider authenticationProvider, AppConfigs appConfigs)
     {
         try {
@@ -162,5 +157,5 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
             VhLogger.Instance.LogError(ex, "Could not create GooglePlayBillingProvider.");
             return null;
         }
-    }
+    }*/
 }
