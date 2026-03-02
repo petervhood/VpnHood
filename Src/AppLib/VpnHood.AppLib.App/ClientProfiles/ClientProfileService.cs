@@ -219,9 +219,9 @@ public class ClientProfileService
             ImportAccessToken(token, overwriteNewer: false, allowOverwriteBuiltIn: true, isBuiltIn: true));
 
         // remove old built-in client profiles that does not exist in the new list
-        /*if (_clientProfiles.RemoveAll(x =>
+        if (_clientProfiles.RemoveAll(x =>
                 x.IsBuiltIn && clientProfiles.All(y => y.ClientProfileId != x.ClientProfileId)) > 0)
-            Save();*/
+            Save();
 
         return clientProfiles.ToArray();
     }
@@ -319,6 +319,7 @@ public class ClientProfileService
 
     private void Save()
     {
+        return;
         Directory.CreateDirectory(Path.GetDirectoryName(ClientProfilesFilePath)!);
         File.WriteAllText(ClientProfilesFilePath, JsonSerializer.Serialize(_clientProfiles));
 
