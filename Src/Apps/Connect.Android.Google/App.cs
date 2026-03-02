@@ -1,13 +1,9 @@
 ﻿using Android.Runtime;
 using VpnHood.App.Client;
-using VpnHood.App.Connect.Droid.Google.FirebaseUtils;
 using VpnHood.AppLib;
 using VpnHood.AppLib.Droid.Common;
 using VpnHood.AppLib.Droid.Common.Constants;
-using VpnHood.AppLib.Droid.GooglePlay;
 using VpnHood.AppLib.Services.Ads;
-using VpnHood.AppLib.Services.Updaters;
-using VpnHood.Core.Client.VpnServices.Abstractions.Tracking;
 
 namespace VpnHood.App.Connect.Droid.Google;
 
@@ -19,7 +15,6 @@ namespace VpnHood.App.Connect.Droid.Google;
     SupportsRtl = AndroidAppConstants.SupportsRtl,
     Debuggable = AppConfigs.IsDebugMode,
     AllowBackup = AndroidAppConstants.AllowBackup)]
-[MetaData("com.google.android.gms.ads.APPLICATION_ID", Value = AppConfigs.AdMobApplicationId)]
 public class App(IntPtr javaReference, JniHandleOwnership transfer)
     : Application(javaReference, transfer)
 {
@@ -34,41 +29,27 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
         resources.Strings.AppName = AppConfigs.AppName;
 
         return new AppOptions(appId: appConfigs.AppId, "VpnHoodConnect", AppConfigs.IsDebugMode) {
-            CustomData = appConfigs.CustomData,
             StorageFolderPath = storageFolderPath,
             AccessKeys = appConfigs.DefaultAccessKey != null ? [appConfigs.DefaultAccessKey] : [],
             Resources = resources,
-            RemoteSettingsUrl = appConfigs.RemoteSettingsUrl,
             UiName = "VpnHoodConnect",
             IsAddAccessKeySupported = false,
-            UserReviewProvider = new GooglePlayInAppUserReviewProvider(AppConfigs.IsDebugMode),
             AccountProvider = null,
             AdProviderItems = [],
-            AllowEndPointTracker = appConfigs.AllowEndPointTracker,
+            AllowEndPointTracker = false,
             AdjustForSystemBars = false,
-            TrackerFactory = AppConfigs.IsDebug ? new NullTrackerFactory() : new FirebaseAnalyticsTrackerFactory(),
             PremiumFeatures = ConnectAppResources.PremiumFeatures,
-            Ga4MeasurementId = appConfigs.Ga4MeasurementId,
             WebUiPort = appConfigs.WebUiPort,
-            AllowRecommendUserReviewByServer = true,
+            AllowRecommendUserReviewByServer = false,
             AdOptions = new AppAdOptions {
-                PreloadAd = true,
-                RejectAdBlocker = true,
-                AllowedPrivateDnsProviders = appConfigs.AllowedPrivateDnsProviders
+                PreloadAd = false,
+                RejectAdBlocker = false
             },
-            UpdaterOptions = new AppUpdaterOptions {
-                UpdateInfoUrl = appConfigs.UpdateInfoUrl,
-                UpdaterProvider = new GooglePlayAppUpdaterProvider()
-            }
         };
     }
 
     public override void OnCreate()
     {
-        // lets init firebase analytics as single tone as soon as possible
-        if (!FirebaseAnalyticsTracker.IsInit && !AppConfigs.IsDebug)
-            FirebaseAnalyticsTracker.Init();
-
         // init app
         VpnHoodAndroidApp.Init(CreateAppOptions);
         base.OnCreate();
