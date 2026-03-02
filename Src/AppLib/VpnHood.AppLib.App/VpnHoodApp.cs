@@ -96,7 +96,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         StorageFolderPath = options.StorageFolderPath ??
                             throw new ArgumentNullException(nameof(options.StorageFolderPath));
         SettingsService = settingsService;
-        SettingsService.BeforeSave += SettingsBeforeSave;
+        //SettingsService.BeforeSave += SettingsBeforeSave;
         _device = device;
         _appPersistState = AppPersistState.Load(Path.Combine(StorageFolderPath, FileNamePersistState));
         _unstableTimeout = options.UnstableTimeout;
@@ -122,7 +122,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         locationService.StateChanged += LocationService_StateChanged;
 
         ClientProfileService = new ClientProfileService(Path.Combine(StorageFolderPath, FolderNameProfiles));
-        Diagnoser.StateChanged += (_, _) => FireConnectionStateChanged();
+        //Diagnoser.StateChanged += (_, _) => FireConnectionStateChanged();
 
         // add a default test public server if not added yet
         var builtInProfileIds = ClientProfileService.ImportBuiltInAccessKeys(options.AccessKeys);
@@ -141,39 +141,38 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         // initialize features
         Features = new AppFeatures {
             Version = appVersion,
-            IsExcludeAppsSupported = _device.IsExcludeAppsSupported,
-            IsIncludeAppsSupported = _device.IsIncludeAppsSupported,
-            IsAddAccessKeySupported = options.IsAddAccessKeySupported,
-            IsPremiumFlagSupported = !options.IsAddAccessKeySupported,
-            AutoRemoveExpiredPremium = options.AutoRemoveExpiredPremium,
-            AllowEndPointStrategy = options.AllowEndPointStrategy,
-            IsTv = device.IsTv,
-            AdjustForSystemBars = options.AdjustForSystemBars,
+            IsExcludeAppsSupported = true,
+            IsIncludeAppsSupported = true,
+            IsAddAccessKeySupported = false,
+            IsPremiumFlagSupported = true,
+            AutoRemoveExpiredPremium = false,
+            AllowEndPointStrategy = false,
+            IsTv = false,
+            AdjustForSystemBars = false,
             UiName = options.UiName,
-            BuiltInClientProfileId = builtInProfileIds.FirstOrDefault()?.ClientProfileId,
-            IsAccountSupported = options.AccountProvider != null,
-            IsBillingSupported = options.AccountProvider?.BillingProvider != null,
-            IsTcpProxySupported = device.IsTcpProxySupported,
-            IsUserReviewSupported = options.UserReviewProvider != null,
-            GaMeasurementId = options.Ga4MeasurementId,
+            BuiltInClientProfileId = null,
+            IsAccountSupported = false,
+            IsBillingSupported = false,
+            IsTcpProxySupported = false,
+            IsUserReviewSupported = false,
+            GaMeasurementId = null,
             WebUiPort = options.WebUiPort,
             ClientId = CreateClientId(options.AppId, options.DeviceId ?? Settings.ClientId),
             AppId = options.AppId,
             AppName = options.Resources.Strings.AppName,
-            DebugCommands = DebugCommands.All,
-            IsLocalNetworkSupported = options.IsLocalNetworkSupported,
-            IsDebugMode = options.IsDebugMode,
-            CustomData = options.CustomData,
-            PremiumFeatures = options.PremiumFeatures,
-            IsAdSupported = options.AdProviderItems.Any(),
-            IsProxySupported = true
+            DebugCommands = [],
+            IsLocalNetworkSupported = false,
+            IsDebugMode = false,
+            CustomData = null,
+            PremiumFeatures = [],
+            IsAdSupported = false,
+            IsProxySupported = false
         };
 
         // create tracker
         var tracker = _trackerFactory.TryCreateTracker(new TrackerCreateParams {
             ClientId = Features.ClientId,
             ClientVersion = Features.Version,
-            Ga4MeasurementId = Features.GaMeasurementId,
             UserAgent = null //not set yet
         });
 
@@ -184,19 +183,12 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         // initialize services
         Services = new AppServices {
             CultureProvider = options.CultureProvider ?? new DefaultAppCultureProvider(this),
-            UserReviewProvider = options.UserReviewProvider,
+            UserReviewProvider = null,
             DeviceUiProvider = deviceUiProvider,
             Tracker = tracker,
             LocationService = locationService,
-            AccountService = options.AccountProvider is null
-                ? null
-                : new AppAccountService(this, options.AccountProvider),
-            UpdaterService = options.UpdaterOptions is null
-                ? null
-                : new AppUpdaterService(
-                    storageFolderPath: options.StorageFolderPath,
-                    appVersion: Features.Version,
-                    updateOptions: options.UpdaterOptions),
+            AccountService = null,
+            UpdaterService = null,
             ProxyEndPointService = new AppProxyEndPointService(
                 storageFolder: Path.Combine(StorageFolderPath, "proxy_endpoints"),
                 ipLocationProvider: locationService.IpRangeLocationProvider,
@@ -206,14 +198,14 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         };
 
         // create ad service
-        var adService = new AppAdService(
+        /*var adService = new AppAdService(
             regionProvider: locationService,
             adProviderItems: options.AdProviderItems,
             loadAdTimeout: options.AdOptions.LoadAdTimeout,
             loadAdPostDelay: options.AdOptions.LoadAdPostDelay,
-            tracker: tracker);
+            tracker: tracker);*/
 
-        AdManager = new AppAdManager(
+        /*AdManager = new AppAdManager(
             adService,
             _vpnServiceManager,
             extendByRewardedAdThreshold: options.AdOptions.ExtendByRewardedAdThreshold,
@@ -221,26 +213,26 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             isPreloadAdEnabled: options.AdOptions.PreloadAd,
             rejectAdBlocker: options.AdOptions.RejectAdBlocker,
             allowedPrivateDnsProviders: options.AdOptions.AllowedPrivateDnsProviders,
-            uiProvider: deviceUiProvider);
+            uiProvider: deviceUiProvider);*/
 
         // temporary, enable internal ad provider if exists and setting is enabled
-        if (options.AdProviderItems.Any(x => x.Name == "InternalAd"))
-            AdManager.AdService.EnableAdProvider("InternalAd", SettingsService.RemoteSettings?.ShowInternalAd == true);
+        /*if (options.AdProviderItems.Any(x => x.Name == "InternalAd"))
+            AdManager.AdService.EnableAdProvider("InternalAd", SettingsService.RemoteSettings?.ShowInternalAd == true);*/
 
         // Apply settings but no error on startup
-        ApplySettings();
+        //ApplySettings();
 
         // schedule job
         AppUiContext.OnChanged += ActiveUiContext_OnChanged;
 
         // launch startup task
-        Task.Run(OnStartup);
+        //Task.Run(OnStartup);
     }
 
     private async Task OnStartup()
     {
         // track ip location (try local provider, the server as satellite ip accepted if local failed)
-        try {
+        /*try {
             if (!SettingsService.Settings.IsStartupTrackerSent) {
                 var countryCode = await Services.LocationService.GetClientCountryCodeAsync(allowVpnServer: false, CancellationToken.None);
                 await Services.Tracker.Track(AppTrackerBuilder.BuildFirstLaunch(Features.ClientId, countryCode));
@@ -250,7 +242,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         }
         catch (Exception ex) {
             VhLogger.Instance.LogError(ex, "Could not sent first launch tracker.");
-        }
+        }*/
 
         //var a = await Dns.GetHostEntryAsync("googleads.g.doubleclick.net");
     }
