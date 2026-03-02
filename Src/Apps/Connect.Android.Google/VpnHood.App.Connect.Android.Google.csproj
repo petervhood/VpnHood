@@ -68,11 +68,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Xamarin.Firebase.Analytics" Version="123.0.0.2" />
-		<PackageReference Include="Xamarin.Firebase.Crashlytics" Version="120.0.3.1" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\..\AppLib\VpnHood.AppLib.Android.Ads.AdMob\VpnHood.AppLib.Android.Ads.AdMob.csproj" />
 		<ProjectReference Include="..\..\AppLib\VpnHood.AppLib.Android.GooglePlay.Core\VpnHood.AppLib.Android.GooglePlay.Core.csproj" />
 		<ProjectReference Include="..\..\AppLib\VpnHood.AppLib.Android.GooglePlay\VpnHood.AppLib.Android.GooglePlay.csproj" />
