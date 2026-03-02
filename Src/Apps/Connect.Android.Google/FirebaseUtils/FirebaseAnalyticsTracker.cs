@@ -1,4 +1,4 @@
-using Firebase;
+/*using Firebase;
 using Firebase.Analytics;
 using Firebase.Crashlytics;
 using Ga4.Trackers;
@@ -62,4 +62,4 @@ public class FirebaseAnalyticsTracker : Singleton<FirebaseAnalyticsTracker>, ITr
 
         _analytics.LogEvent(trackEvent.EventName, bundle);
     }
-}
+}*/
