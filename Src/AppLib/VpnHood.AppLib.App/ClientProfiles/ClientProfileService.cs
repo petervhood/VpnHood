@@ -276,20 +276,21 @@ public class ClientProfileService
     private async Task<bool> UpdateServerTokenByUrl(Token token, string url,
         HttpClient httpClient, CancellationTokenSource cts)
     {
+        return true;
         try {
-            if (VhUtils.IsNullOrEmpty(token.ServerToken.Urls) || token.ServerToken.Secret == null)
-                return false;
+            /*if (VhUtils.IsNullOrEmpty(token.ServerToken.Urls) || token.ServerToken.Secret == null)
+                return false;*/
 
             // update token
-            VhLogger.Instance.LogInformation("Trying to get a new ServerToken from url. Url: {Url}",
-                VhLogger.FormatHostName(url));
+            /*VhLogger.Instance.LogInformation("Trying to get a new ServerToken from url. Url: {Url}",
+                VhLogger.FormatHostName(url));*/
 
-            var encryptedServerToken = await VhUtils
+            /*var encryptedServerToken = await VhUtils
                 .RunTask(httpClient.GetStringAsync(url), TimeSpan.FromSeconds(20), cts.Token)
-                .Vhc();
+                .Vhc();*/
 
             // update token
-            lock (_updateByUrlLock) {
+            /*lock (_updateByUrlLock) {
                 cts.Token.ThrowIfCancellationRequested();
                 var newServerToken = ServerToken.Decrypt(token.ServerToken.Secret, encryptedServerToken);
 
@@ -308,7 +309,7 @@ public class ClientProfileService
                 VhLogger.Instance.LogInformation("ServerToken has been updated from url.");
                 cts.Cancel();
                 return true;
-            }
+            }*/
         }
         catch (Exception ex) {
             if (!cts.IsCancellationRequested)
@@ -335,6 +336,7 @@ public class ClientProfileService
 
     private IEnumerable<ClientProfile> Load()
     {
+        return [];
         try {
             var json = File.ReadAllText(ClientProfilesFilePath);
             var clientProfiles = JsonUtils.Deserialize<ClientProfile[]>(json);
@@ -347,6 +349,7 @@ public class ClientProfileService
 
     internal void UpdateFromAccount(string[] accessKeys)
     {
+        return;
         var accessTokens = accessKeys.Select(Token.FromAccessKey);
 
         // Remove client profiles that does not exist in the account
