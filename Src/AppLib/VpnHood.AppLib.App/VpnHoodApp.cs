@@ -99,7 +99,6 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         SettingsService.BeforeSave += SettingsBeforeSave;
         _device = device;
         _appPersistState = AppPersistState.Load(Path.Combine(StorageFolderPath, FileNamePersistState));
-        _ga4MeasurementId = options.Ga4MeasurementId;
         _unstableTimeout = options.UnstableTimeout;
         _autoWaitTimeout = options.AutoWaitTimeout;
         _tcpTimeout = options.TcpTimeout;
@@ -258,6 +257,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
 
     private void ApplySettings()
     {
+        return;
         try {
             var oldUserSettings = SettingsService.OldUserSettings;
 

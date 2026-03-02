@@ -19,6 +19,7 @@ public class AppSettings
 
     public void Save()
     {
+        return;
         if (AppSettingsService == null)
             throw new InvalidOperationException("AppSettingsService is not set");
 
