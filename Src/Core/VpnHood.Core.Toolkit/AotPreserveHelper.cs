@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using VpnHood.Core.Toolkit.Converters;
+using VpnHood.Core.Toolkit.Net;
 
 namespace VpnHood.Core.Toolkit;
 
@@ -13,6 +14,11 @@ public static class AotPreserveHelper
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ArrayConverter<,>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IPAddressConverter))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IPEndPointConverter))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IpRangeConverter))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IpRange))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IPNetwork))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IpNetwork))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(IpNetworkConverter))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(NullToEmptyArrayConverter<>))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(TimeSpanConverter))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(VersionConverter))]
