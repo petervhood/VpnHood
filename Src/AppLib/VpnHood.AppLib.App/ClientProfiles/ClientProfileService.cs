@@ -175,7 +175,7 @@ public class ClientProfileService
     private readonly Lock _importLock = new();
 
     // ReSharper disable once ParameterOnlyUsedForPreconditionCheck.Local
-    private ClientProfile? ImportAccessToken(Token token, bool overwriteNewer, bool allowOverwriteBuiltIn,
+    private ClientProfile ImportAccessToken(Token token, bool overwriteNewer, bool allowOverwriteBuiltIn,
         bool isForAccount = false, bool isBuiltIn = false)
     {
         lock (_importLock) {
@@ -191,7 +191,8 @@ public class ClientProfileService
             }
 
             // add if it is a new token
-            /*if (_clientProfiles.All(x => x.Token.TokenId != token.TokenId)) {
+            if (_clientProfiles.All(x => x.Token.TokenId != token.TokenId)) {
+                Console.WriteLine("AAA");
                 var clientProfile = new ClientProfile {
                     ClientProfileId = Guid.NewGuid(),
                     ClientProfileName = token.Name,
@@ -199,18 +200,18 @@ public class ClientProfileService
                     IsForAccount = isForAccount,
                     IsBuiltIn = isBuiltIn
                 };
-
+                Console.WriteLine("BBB");
                 _clientProfiles.Add(clientProfile);
-            }*/
+                Console.WriteLine("CCC");
+            }
 
+            Console.WriteLine("DDD");
             // save profiles
             Save();
+            Console.WriteLine("EEE");
 
-            var ret = _clientProfiles.FirstOrDefault(x => x.Token.TokenId == token.TokenId);
-            if (ret != null) {
-                Console.WriteLine("Null clientProfiles");
-                return null;
-            }
+            var ret = _clientProfiles.First(x => x.Token.TokenId == token.TokenId);
+            Console.WriteLine("FFF");
             return ret;
         }
     }
