@@ -126,7 +126,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         Diagnoser.StateChanged += (_, _) => FireConnectionStateChanged();
 
         // add a default test public server if not added yet
-        //var builtInProfileIds = ClientProfileService.ImportBuiltInAccessKeys(options.AccessKeys);
+        var builtInProfileIds = ClientProfileService.ImportBuiltInAccessKeys(options.AccessKeys);
 
         // remove default client profile if not exists
         /*if (UserSettings.ClientProfileId != null &&
