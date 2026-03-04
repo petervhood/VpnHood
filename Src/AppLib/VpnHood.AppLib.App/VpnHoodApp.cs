@@ -122,7 +122,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             ipLocationZipData: options.Resources.IpLocationZipData);
         locationService.StateChanged += LocationService_StateChanged;
 
-        /*ClientProfileService = new ClientProfileService(Path.Combine(StorageFolderPath, FolderNameProfiles));
+        ClientProfileService = new ClientProfileService(Path.Combine(StorageFolderPath, FolderNameProfiles));
         Diagnoser.StateChanged += (_, _) => FireConnectionStateChanged();
 
         // add a default test public server if not added yet
@@ -235,7 +235,7 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         AppUiContext.OnChanged += ActiveUiContext_OnChanged;
 
         // launch startup task
-        Task.Run(OnStartup);*/
+        Task.Run(OnStartup);
     }
 
     private async Task OnStartup()
