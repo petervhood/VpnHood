@@ -122,8 +122,8 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             ipLocationZipData: options.Resources.IpLocationZipData);
         locationService.StateChanged += LocationService_StateChanged;
 
-        //ClientProfileService = new ClientProfileService(Path.Combine(StorageFolderPath, FolderNameProfiles));
-        //Diagnoser.StateChanged += (_, _) => FireConnectionStateChanged();
+        ClientProfileService = new ClientProfileService(Path.Combine(StorageFolderPath, FolderNameProfiles));
+        Diagnoser.StateChanged += (_, _) => FireConnectionStateChanged();
 
         // add a default test public server if not added yet
         //var builtInProfileIds = ClientProfileService.ImportBuiltInAccessKeys(options.AccessKeys);
