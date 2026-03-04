@@ -4,6 +4,7 @@ using VpnHood.AppLib;
 using VpnHood.AppLib.Droid.Common;
 using VpnHood.AppLib.Droid.Common.Constants;
 using VpnHood.AppLib.Services.Ads;
+using VpnHood.Core.Toolkit;
 
 namespace VpnHood.App.Connect.Droid.Google;
 
@@ -50,6 +51,7 @@ public class App(IntPtr javaReference, JniHandleOwnership transfer)
 
     public override void OnCreate()
     {
+        AotPreserveHelper.PreserveTypes();
         // init app
         VpnHoodAndroidApp.Init(CreateAppOptions);
         base.OnCreate();
