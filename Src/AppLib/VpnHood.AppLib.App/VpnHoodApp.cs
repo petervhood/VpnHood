@@ -129,18 +129,18 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
         var builtInProfileIds = ClientProfileService.ImportBuiltInAccessKeys(options.AccessKeys);
 
         // remove default client profile if not exists
-        if (UserSettings.ClientProfileId != null &&
+        /*if (UserSettings.ClientProfileId != null &&
             ClientProfileService.FindById(UserSettings.ClientProfileId.Value) == null)
-            UserSettings.ClientProfileId = null;
+            UserSettings.ClientProfileId = null;*/
 
         // set first built in profile as default if default is not set
-        UserSettings.ClientProfileId ??= builtInProfileIds.FirstOrDefault()?.ClientProfileId;
+        //UserSettings.ClientProfileId ??= builtInProfileIds.FirstOrDefault()?.ClientProfileId;
 
         // set the default server location if not set
-        var deviceUiProvider = options.DeviceUiProvider ?? new NullDeviceUiProvider();
+        //var deviceUiProvider = options.DeviceUiProvider ?? new NullDeviceUiProvider();
 
         // initialize features
-        Features = new AppFeatures {
+        /*Features = new AppFeatures {
             Version = appVersion,
             IsExcludeAppsSupported = _device.IsExcludeAppsSupported,
             IsIncludeAppsSupported = _device.IsIncludeAppsSupported,
@@ -168,22 +168,22 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             PremiumFeatures = options.PremiumFeatures,
             IsAdSupported = options.AdProviderItems.Any(),
             IsProxySupported = true
-        };
+        };*/
 
         // create tracker
-        var tracker = _trackerFactory.TryCreateTracker(new TrackerCreateParams {
+        /*var tracker = _trackerFactory.TryCreateTracker(new TrackerCreateParams {
             ClientId = Features.ClientId,
             ClientVersion = Features.Version,
             Ga4MeasurementId = Features.GaMeasurementId,
             UserAgent = null //not set yet
-        });
+        });*/
 
         // initialize client manager
-        _vpnServiceManager = new VpnServiceManager(device, options.EventWatcherInterval);
-        _vpnServiceManager.StateChanged += VpnService_StateChanged;
+        //_vpnServiceManager = new VpnServiceManager(device, options.EventWatcherInterval);
+        //_vpnServiceManager.StateChanged += VpnService_StateChanged;
 
         // initialize services
-        Services = new AppServices {
+        /*Services = new AppServices {
             CultureProvider = options.CultureProvider ?? new DefaultAppCultureProvider(this),
             UserReviewProvider = options.UserReviewProvider,
             DeviceUiProvider = deviceUiProvider,
@@ -204,17 +204,17 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
                 vpnServiceManager: _vpnServiceManager,
                 deviceUiProvider: deviceUiProvider,
                 settingsService: settingsService)
-        };
+        };*/
 
         // create ad service
-        var adService = new AppAdService(
+        /*var adService = new AppAdService(
             regionProvider: locationService,
             adProviderItems: options.AdProviderItems,
             loadAdTimeout: options.AdOptions.LoadAdTimeout,
             loadAdPostDelay: options.AdOptions.LoadAdPostDelay,
-            tracker: tracker);
+            tracker: tracker);*/
 
-        AdManager = new AppAdManager(
+        /*AdManager = new AppAdManager(
             adService,
             _vpnServiceManager,
             extendByRewardedAdThreshold: options.AdOptions.ExtendByRewardedAdThreshold,
@@ -222,11 +222,11 @@ public class VpnHoodApp : Singleton<VpnHoodApp>,
             isPreloadAdEnabled: options.AdOptions.PreloadAd,
             rejectAdBlocker: options.AdOptions.RejectAdBlocker,
             allowedPrivateDnsProviders: options.AdOptions.AllowedPrivateDnsProviders,
-            uiProvider: deviceUiProvider);
+            uiProvider: deviceUiProvider);*/
 
         // temporary, enable internal ad provider if exists and setting is enabled
-        if (options.AdProviderItems.Any(x => x.Name == "InternalAd"))
-            AdManager.AdService.EnableAdProvider("InternalAd", SettingsService.RemoteSettings?.ShowInternalAd == true);
+        /*if (options.AdProviderItems.Any(x => x.Name == "InternalAd"))
+            AdManager.AdService.EnableAdProvider("InternalAd", SettingsService.RemoteSettings?.ShowInternalAd == true);*/
 
         // Apply settings but no error on startup
         ApplySettings();
